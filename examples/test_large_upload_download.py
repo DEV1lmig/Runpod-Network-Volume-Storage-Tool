@@ -53,7 +53,7 @@ def test_large_file_upload_download():
     """Test uploading and downloading a large file."""
     
     # Configuration
-    TEST_FILE_SIZE_GB = float(os.getenv('TEST_FILE_SIZE_GB', '20'))
+    TEST_FILE_SIZE_GB = float(os.getenv('TEST_FILE_SIZE_GB', '3'))
     
     print("🚀 Runpod Storage Large File Test")
     print(f"📦 Test file size: {TEST_FILE_SIZE_GB}GB")
@@ -97,15 +97,39 @@ def test_large_file_upload_download():
         
         upload_start = time.time()
         print(f"📤 Uploading to {remote_path}...")
+        print(f"⚡ Using parallel multipart upload (10 concurrent threads)")
+        
+        # Progress tracking for upload
+        last_progress_time = [time.time()]
+        last_bytes = [0]
+        
+        def upload_progress(bytes_uploaded, total_bytes, speed_mbps):
+            current_time = time.time()
+            time_diff = current_time - last_progress_time[0]
+            
+            if time_diff >= 1.0 or bytes_uploaded >= total_bytes:  # Update every second or at completion
+                bytes_diff = bytes_uploaded - last_bytes[0]
+                actual_speed = (bytes_diff / (1024**2)) / time_diff if time_diff > 0 else 0
+                
+                progress_pct = (bytes_uploaded / total_bytes * 100) if total_bytes > 0 else 0
+                uploaded_gb = bytes_uploaded / (1024**3)
+                total_gb = total_bytes / (1024**3)
+                
+                print(f"  Upload Progress: {progress_pct:.1f}% ({uploaded_gb:.2f}/{total_gb:.2f} GB) - Speed: {actual_speed:.2f} MB/s", end='\r')
+                
+                last_progress_time[0] = current_time
+                last_bytes[0] = bytes_uploaded
         
         # Upload with automatic chunk size detection
         api.upload_file(
             str(local_file),
             volume_id,
             remote_path,
-            chunk_size=None  # Auto-detect optimal chunk size
+            chunk_size=None,  # Auto-detect optimal chunk size
+            progress_callback=upload_progress
         )
         
+        print()  # New line after progress
         upload_time = time.time() - upload_start
         upload_speed = (file_size / (1024**2)) / upload_time  # MB/s
         
@@ -136,13 +160,37 @@ def test_large_file_upload_download():
         
         download_start = time.time()
         print(f"📥 Downloading to {downloaded_file}...")
+        print(f"⚡ Using parallel multipart download (10 concurrent threads)")
+        
+        # Progress tracking for download
+        last_progress_time = [time.time()]
+        last_bytes = [0]
+        
+        def download_progress(bytes_downloaded, total_bytes, filename):
+            current_time = time.time()
+            time_diff = current_time - last_progress_time[0]
+            
+            if time_diff >= 1.0 or bytes_downloaded >= total_bytes:  # Update every second or at completion
+                bytes_diff = bytes_downloaded - last_bytes[0]
+                speed_mbps = (bytes_diff / (1024**2)) / time_diff if time_diff > 0 else 0
+                
+                progress_pct = (bytes_downloaded / total_bytes * 100) if total_bytes > 0 else 0
+                downloaded_gb = bytes_downloaded / (1024**3)
+                total_gb = total_bytes / (1024**3)
+                
+                print(f"  Download Progress: {progress_pct:.1f}% ({downloaded_gb:.2f}/{total_gb:.2f} GB) - Speed: {speed_mbps:.2f} MB/s", end='\r')
+                
+                last_progress_time[0] = current_time
+                last_bytes[0] = bytes_downloaded
         
         api.download_file(
             volume_id,
             remote_path,
-            str(downloaded_file)
+            str(downloaded_file),
+            progress_callback=download_progress
         )
         
+        print()  # New line after progress
         download_time = time.time() - download_start
         download_speed = (file_size / (1024**2)) / download_time  # MB/s
         

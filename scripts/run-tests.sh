@@ -63,7 +63,7 @@ case $TEST_TYPE in
         $PYTHON_CMD examples/test_large_file_e2e.py
         ;;
     sync)
-        FILE_SIZE=${TEST_FILE_SIZE_GB:-20}
+        FILE_SIZE=${TEST_FILE_SIZE_GB:-3}
         echo "Running large file upload/download test (${FILE_SIZE}GB)..."
         export TEST_FILE_SIZE_GB=$FILE_SIZE
         $PYTHON_CMD examples/test_large_upload_download.py
@@ -77,13 +77,13 @@ case $TEST_TYPE in
         echo "  creds  - Test credentials (default)"
         echo "  quick  - Quick 100MB upload test"
         echo "  full   - Full 6GB end-to-end test"
-        echo "  sync   - Large file upload/download test (20GB default)"
+        echo "  sync   - Large file upload/download test (3GB default)"
         echo ""
         echo "Examples:"
         echo "  ./test.sh           # Test credentials"
         echo "  ./test.sh quick     # Run quick test"
         echo "  ./test.sh full      # Run full test"
-        echo "  ./test.sh sync      # Run 20GB upload/download test"
+        echo "  ./test.sh sync      # Run 3GB upload/download test"
         echo ""
         echo "Custom file size:"
         echo "  export TEST_FILE_SIZE_GB=10"

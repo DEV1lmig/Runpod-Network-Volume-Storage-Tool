@@ -198,13 +198,16 @@ class RunpodStorageAPI:
         volume_id: str,
         remote_path: str,
         local_path: Optional[Union[str, Path]] = None,
+        progress_callback: Optional[callable] = None,
     ) -> bool:
-        """Download a file from a volume.
+        """Download a file from a volume with optional progress tracking.
 
         Args:
             volume_id: Volume ID
             remote_path: Remote file path
             local_path: Local path to save (default: filename)
+            progress_callback: Optional callback for progress updates.
+                Called with (bytes_downloaded, total_bytes, filename)
 
         Returns:
             True if successful
@@ -216,7 +219,10 @@ class RunpodStorageAPI:
         datacenter_id = volume["dataCenterId"]
         s3_client = self._get_s3_client(datacenter_id)
 
-        return s3_client.download_file(volume_id, remote_path, str(local_path))
+        return s3_client.download_file(
+            volume_id, remote_path, str(local_path), 
+            chunk_size=None, progress_callback=progress_callback
+        )
 
     def delete_file(self, volume_id: str, remote_path: str) -> bool:
         """Delete a file from a volume."""

@@ -11,6 +11,7 @@ from threading import Lock
 from typing import Any, Dict, List, Optional
 
 import boto3
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore.exceptions import (
     BotoCoreError,
@@ -385,13 +386,16 @@ class RunpodS3Client:
         )
         return True
 
-    def download_file(self, volume_id: str, remote_path: str, local_path: str) -> bool:
-        """Download a file from network volume.
+    def download_file(self, volume_id: str, remote_path: str, local_path: str, 
+                      chunk_size: Optional[int] = None, progress_callback: Optional[callable] = None) -> bool:
+        """Download a file from network volume using parallel multipart transfers for large files.
 
         Args:
             volume_id: Network volume ID
             remote_path: Remote file path in volume
             local_path: Local file path to save to
+            chunk_size: Optional chunk size for multipart downloads (default: auto-detect)
+            progress_callback: Optional callback for progress updates
 
         Returns:
             True if successful
@@ -401,9 +405,59 @@ class RunpodS3Client:
             local_path = Path(local_path)
             local_path.parent.mkdir(parents=True, exist_ok=True)
 
-            logger.info(f"Downloading {remote_path} to {local_path}")
-            self.s3.download_file(volume_id, remote_path, str(local_path))
-            logger.info("Download completed successfully")
+            # Get file size to determine download strategy
+            try:
+                response = self.s3.head_object(Bucket=volume_id, Key=remote_path)
+                file_size = response.get('ContentLength', 0)
+            except Exception as e:
+                logger.warning(f"Could not determine file size, using default download: {e}")
+                file_size = 0
+
+            # Auto-detect chunk size if not provided
+            if chunk_size is None:
+                if file_size > 1024 * 1024 * 1024:  # > 1GB
+                    chunk_size = 100 * 1024 * 1024  # 100MB chunks
+                elif file_size > 100 * 1024 * 1024:  # > 100MB
+                    chunk_size = 50 * 1024 * 1024   # 50MB chunks
+                else:
+                    chunk_size = 8 * 1024 * 1024    # 8MB chunks for smaller files
+
+            # Configure parallel multipart download
+            transfer_config = TransferConfig(
+                multipart_threshold=25 * 1024 * 1024,  # Use multipart for files > 25MB
+                multipart_chunksize=chunk_size,
+                max_concurrency=10,  # Up to 10 parallel threads
+                use_threads=True
+            )
+
+            logger.info(f"Downloading {remote_path} to {local_path} (size: {file_size / (1024**2):.2f}MB)")
+            
+            # Add progress tracking if callback provided
+            if progress_callback:
+                class ProgressTracker:
+                    def __init__(self, total_size):
+                        self.total_size = total_size
+                        self.bytes_transferred = 0
+                        self.lock = Lock()
+                    
+                    def __call__(self, bytes_amount):
+                        with self.lock:
+                            self.bytes_transferred += bytes_amount
+                            progress_callback(self.bytes_transferred, self.total_size, remote_path)
+                
+                tracker = ProgressTracker(file_size)
+                self.s3.download_file(
+                    volume_id, remote_path, str(local_path),
+                    Config=transfer_config,
+                    Callback=tracker
+                )
+            else:
+                self.s3.download_file(
+                    volume_id, remote_path, str(local_path),
+                    Config=transfer_config
+                )
+            
+            logger.info(f"Download completed successfully (parallel multipart: {file_size > 25 * 1024 * 1024})")
             return True
         except Exception as e:
             logger.error(f"Failed to download file: {e}")
@@ -462,11 +516,22 @@ class RunpodS3Client:
             return 0
 
     def _simple_upload(self, local_path: str, volume_id: str, remote_path: str) -> bool:
-        """Upload a file using simple upload."""
+        """Upload a file using optimized transfer configuration."""
         try:
-            logger.info(f"Uploading {local_path} to {remote_path}")
-            self.s3.upload_file(local_path, volume_id, remote_path)
-            logger.info("Upload completed successfully")
+            # Get file size
+            file_size = Path(local_path).stat().st_size
+            
+            # Configure transfer for optimal performance
+            transfer_config = TransferConfig(
+                multipart_threshold=25 * 1024 * 1024,  # Use multipart for files > 25MB
+                multipart_chunksize=8 * 1024 * 1024,   # 8MB chunks
+                max_concurrency=10,  # Up to 10 parallel threads
+                use_threads=True
+            )
+            
+            logger.info(f"Uploading {local_path} to {remote_path} (size: {file_size / (1024**2):.2f}MB)")
+            self.s3.upload_file(local_path, volume_id, remote_path, Config=transfer_config)
+            logger.info(f"Upload completed successfully (parallel: {file_size > 25 * 1024 * 1024})")
             return True
         except Exception as e:
             logger.error(f"Failed to upload file: {e}")
