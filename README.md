@@ -408,6 +408,11 @@ for file_info in all_files:
 
 The tool supports large file uploads with intelligent automatic optimization:
 
+**Multipart Upload Requirements:**
+- Files **larger than 500MB** must use multipart uploads (S3 requirement)
+- The tool automatically handles this for you - no configuration needed
+- Simple uploads are used for files < 500MB, multipart for larger files
+
 **Automatic Chunk Size Detection** - No configuration needed! The tool automatically selects the optimal chunk size based on your file size:
 - **< 1 GB**: 10 MB chunks (fast for small files)
 - **1-10 GB**: 50 MB chunks (balanced performance)
