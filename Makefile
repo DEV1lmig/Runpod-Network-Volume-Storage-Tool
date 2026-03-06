@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format test openapi pre-commit-install pre-commit-run clean
+.PHONY: help install dev lint format test openapi pre-commit-install pre-commit-run clean build-frontend dev-frontend
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -9,6 +9,16 @@ install: ## Install dependencies
 
 dev: ## Install development dependencies
 	uv sync --all-extras
+
+build-frontend: ## Build frontend for production
+	@echo "🏗️  Building frontend..."
+	cd frontend && npm install && npm run build
+	@echo "✅ Frontend built successfully"
+
+dev-frontend: ## Run frontend in development mode
+	@echo "🚀 Starting frontend dev server..."
+	@echo "Make sure API server is running on port 8000"
+	cd frontend && npm run dev
 
 lint: ## Run linting
 	uv run ruff check src tests
@@ -39,16 +49,20 @@ clean: ## Clean build artifacts
 	rm -rf *.egg-info/
 	find . -type d -name __pycache__ -delete
 	find . -type f -name "*.pyc" -delete
+	rm -rf frontend/node_modules/
+	rm -rf frontend/dist/
 
 # Development workflow commands
 setup-dev: dev pre-commit-install ## Complete development setup
 	@echo "🎉 Development environment ready!"
 	@echo ""
 	@echo "Available commands:"
-	@echo "  make openapi     - Generate OpenAPI spec"
-	@echo "  make lint        - Run linting"
-	@echo "  make format      - Format code"
-	@echo "  make test        - Run tests"
+	@echo "  make build-frontend  - Build frontend for production"
+	@echo "  make dev-frontend    - Run frontend dev server"
+	@echo "  make openapi         - Generate OpenAPI spec"
+	@echo "  make lint            - Run linting"
+	@echo "  make format          - Format code"
+	@echo "  make test            - Run tests"
 	@echo ""
 	@echo "The OpenAPI spec will be auto-generated on commits when server code changes."
 
