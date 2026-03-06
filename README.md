@@ -11,6 +11,7 @@ A comprehensive tool for managing Runpod network storage volumes and files. Buil
 - [File Browser Guide](#file-browser-guide)
 - [Command Line Usage](#command-line-usage)
 - [Python SDK Usage](#python-sdk-usage)
+- [ZIP File Extraction](#zip-file-extraction)
 - [API Server](#api-server)
 - [Troubleshooting](#troubleshooting)
 
@@ -836,6 +837,62 @@ cleaned = api.cleanup_abandoned_uploads(volume_id, max_age_hours=1)
 - Compress files before uploading
 - Use wired connection instead of WiFi
 - Upload during off-peak hours for better bandwidth
+
+## ZIP File Extraction
+
+Extract zip files directly within your volumes without downloading them locally.
+
+### Quick Example
+
+```python
+from runpod_storage import RunpodStorageAPI
+
+api = RunpodStorageAPI()
+
+# Extract a zip file to the same directory
+files = api.extract_zip("volume-id", "data/archive.zip")
+print(f"Extracted {len(files)} files")
+
+# Extract to a specific directory
+files = api.extract_zip("volume-id", "backup.zip", target_path="restored/")
+```
+
+### Web Interface
+
+1. Navigate to the file browser
+2. Find a .zip file
+3. Click the **Extract** button (archive icon)
+4. Files will be extracted to the same directory
+
+### How It Works
+
+The tool:
+1. Downloads the zip file to a temporary location
+2. Extracts all files locally
+3. Uploads each extracted file back to the volume
+4. Automatically cleans up temporary files
+
+### Features
+
+- Preserves directory structure from the zip file
+- Progress tracking for large extractions
+- Automatic cleanup of temporary files
+- Works with nested folders in the zip
+
+### REST API Endpoint
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/volumes/{volume_id}/files/extract" \
+  -H "runpod-api-key: rpa_..." \
+  -H "s3-access-key: user_..." \
+  -H "s3-secret-key: rps_..." \
+  -d "zip_path=data/archive.zip" \
+  -d "target_path=extracted/"
+```
+
+For detailed documentation, see [ZIP Extraction Guide](docs/ZIP_EXTRACTION_GUIDE.md).
+
+For a complete example, see [examples/extract_zip_example.py](examples/extract_zip_example.py).
 
 ## API Server
 
