@@ -231,6 +231,94 @@ class RunpodStorageAPI:
         s3_client = self._get_s3_client(datacenter_id)
         return s3_client.delete_file(volume_id, remote_path)
 
+    def extract_zip(
+        self,
+        volume_id: str,
+        zip_path: str,
+        target_path: Optional[str] = None,
+        progress_callback: Optional[callable] = None,
+    ) -> List[str]:
+        """Extract a zip file within a volume.
+
+        Downloads the zip file, extracts it locally, then uploads extracted files
+        back to the volume.
+
+        Args:
+            volume_id: Volume ID
+            zip_path: Path to the zip file in the volume
+            target_path: Target directory for extracted files (default: same directory as zip)
+            progress_callback: Optional callback for progress updates.
+                Called with (current_file_num, total_files, current_filename)
+
+        Returns:
+            List of extracted file paths
+
+        Example:
+            >>> api = RunpodStorageAPI()
+            >>> # Extract archive.zip to the same directory
+            >>> files = api.extract_zip("vol_123", "data/archive.zip")
+            >>> print(f"Extracted {len(files)} files: {files}")
+            >>>
+            >>> # Extract to a specific directory
+            >>> files = api.extract_zip("vol_123", "backup.zip", target_path="extracted/")
+        """
+        import zipfile
+        import tempfile
+        import shutil
+
+        # Determine target directory
+        if target_path is None:
+            # Extract to same directory as the zip file
+            target_path = str(Path(zip_path).parent)
+            if target_path == ".":
+                target_path = ""
+
+        # Ensure target path ends with / if not empty
+        if target_path and not target_path.endswith("/"):
+            target_path += "/"
+
+        # Create temporary directory for extraction
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_zip = Path(temp_dir) / "archive.zip"
+            temp_extract = Path(temp_dir) / "extracted"
+            temp_extract.mkdir()
+
+            # Download the zip file
+            logger.info(f"Downloading zip file: {zip_path}")
+            self.download_file(volume_id, zip_path, str(temp_zip))
+
+            # Extract the zip file
+            logger.info(f"Extracting zip file...")
+            try:
+                with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+                    zip_ref.extractall(temp_extract)
+            except zipfile.BadZipFile:
+                raise ValueError(f"Invalid zip file: {zip_path}")
+
+            # Get list of extracted files
+            extracted_files = []
+            all_files = list(temp_extract.rglob("*"))
+            file_count = len([f for f in all_files if f.is_file()])
+
+            # Upload each extracted file back to the volume
+            current_file = 0
+            for file_path in all_files:
+                if file_path.is_file():
+                    current_file += 1
+                    # Calculate relative path from extraction root
+                    relative_path = file_path.relative_to(temp_extract)
+                    remote_file_path = target_path + str(relative_path).replace("\\", "/")
+
+                    if progress_callback:
+                        progress_callback(current_file, file_count, str(relative_path))
+
+                    logger.info(f"Uploading: {remote_file_path}")
+                    self.upload_file(str(file_path), volume_id, remote_file_path)
+                    extracted_files.append(remote_file_path)
+
+        logger.info(f"Extracted {len(extracted_files)} files to {target_path}")
+        return extracted_files
+
     # Utility methods
     def get_available_datacenters(self) -> Dict[str, str]:
         """Get available datacenters."""

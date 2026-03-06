@@ -6,6 +6,7 @@ Implements all REST endpoints with comprehensive validation and error handling.
 
 import os
 import tempfile
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, Header
@@ -24,6 +25,8 @@ from ..core.models import (
     DeleteFileRequest,
     DeleteResponse,
     DownloadFileRequest,
+    ExtractZipRequest,
+    ExtractZipResponse,
     ListFilesRequest,
     ListFilesResponse,
     ListVolumesResponse,
@@ -368,6 +371,51 @@ async def delete_file(
         raise HTTPException(status_code=e.status_code or 500, detail=str(e))
     except RunpodStorageError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/volumes/{volume_id}/files/extract",
+    response_model=ExtractZipResponse,
+    summary="Extract zip file",
+    description="Extract a zip file within a network volume. Downloads the zip, extracts it, and uploads the extracted files back to the volume.",
+)
+async def extract_zip(
+    volume_id: str,
+    zip_path: str,
+    target_path: str = None,
+    api_key: str = Depends(get_runpod_api_key),
+    s3_access_key: str = Header(..., description="S3 access key (e.g., user_XXX...)"),
+    s3_secret_key: str = Header(..., description="S3 secret key (e.g., rps_XXX...)"),
+) -> ExtractZipResponse:
+    """Extract a zip file in a volume."""
+    try:
+        # Create API instance with provided S3 credentials
+        api = RunpodStorageAPI(
+            api_key=api_key,
+            s3_access_key=s3_access_key,
+            s3_secret_key=s3_secret_key,
+        )
+
+        # Extract the zip file
+        extracted_files = api.extract_zip(volume_id, zip_path, target_path)
+
+        return ExtractZipResponse(
+            success=True,
+            extracted_files=extracted_files,
+            total_files=len(extracted_files),
+            target_path=target_path if target_path else str(Path(zip_path).parent)
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except VolumeNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
+    except NetworkError as e:
+        raise HTTPException(status_code=e.status_code or 500, detail=str(e))
+    except RunpodStorageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
 
 @router.get(

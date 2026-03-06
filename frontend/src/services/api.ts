@@ -124,6 +124,25 @@ class ApiClient {
     );
   }
 
+  async extractZip(
+    volumeId: string,
+    zipPath: string,
+    targetPath?: string
+  ): Promise<string[]> {
+    const response = await this.client.post(
+      `/volumes/${volumeId}/files/extract`,
+      {},
+      {
+        headers: this.getHeaders(),
+        params: {
+          zip_path: zipPath,
+          ...(targetPath && { target_path: targetPath }),
+        },
+      }
+    );
+    return response.data.extracted_files;
+  }
+
   async listDatacenters(): Promise<Datacenter[]> {
     const response = await this.client.get('/datacenters', {
       headers: this.getVolumeHeaders(),

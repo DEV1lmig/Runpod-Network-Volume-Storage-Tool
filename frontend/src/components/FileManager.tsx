@@ -9,7 +9,8 @@ import {
   Upload,
   RefreshCw,
   FolderOpen,
-  ArrowLeft
+  ArrowLeft,
+  Archive
 } from 'lucide-react';
 import FileUpload from './FileUpload';
 
@@ -74,6 +75,23 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
       loadFiles();
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to delete file');
+    }
+  };
+
+  const handleExtract = async (file: FileInfo) => {
+    if (!window.confirm(`Extract ${file.key}? This will extract all files to the same directory.`)) {
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('Extracting zip file... Please wait.');
+      const extractedFiles = await apiClient.extractZip(volumeId, file.key);
+      setSuccess(`Successfully extracted ${extractedFiles.length} files from ${file.key}`);
+      setTimeout(() => setSuccess(''), 5000);
+      loadFiles();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to extract zip file');
     }
   };
 
@@ -236,6 +254,15 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
                 >
                   <Download size={20} />
                 </button>
+                {file.key.toLowerCase().endsWith('.zip') && (
+                  <button
+                    onClick={() => handleExtract(file)}
+                    className="icon-btn"
+                    title="Extract zip file"
+                  >
+                    <Archive size={20} />
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(file)}
                   className="icon-btn danger"
