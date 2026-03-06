@@ -38,6 +38,7 @@ dependencies = [
     "uvicorn>=0.33.0",
     "fastapi>=0.116.1",
     "python-multipart>=0.0.20",
+    "py7zr>=0.20.0",
 ]
 
 [project.optional-dependencies]

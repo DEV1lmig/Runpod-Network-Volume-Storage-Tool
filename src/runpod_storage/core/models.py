@@ -180,6 +180,47 @@ class DeleteFileRequest(BaseModel):
     )
 
 
+class ExtractArchiveRequest(BaseModel):
+    """Request model for archive file extraction (zip or 7z)."""
+
+    archive_path: str = Field(
+        ...,
+        min_length=1,
+        description="Path to the archive file in the volume (.zip or .7z)",
+        example="data/archive.zip",
+    )
+    target_path: Optional[str] = Field(
+        None,
+        description="Target directory for extracted files (defaults to archive file's directory)",
+        example="data/extracted/",
+    )
+    s3_credentials: S3Credentials = Field(
+        ..., description="S3 credentials for file operations"
+    )
+
+
+class ExtractZipRequest(BaseModel):
+    """Request model for zip file extraction.
+
+    Deprecated: Use ExtractArchiveRequest instead. Kept for backward compatibility.
+    """
+
+    zip_path: str = Field(
+        ...,
+        min_length=1,
+        description="Path to the zip file in the volume",
+        example="data/archive.zip",
+    )
+    target_path: Optional[str] = Field(
+        None,
+        description="Target directory for extracted files (defaults to zip file's directory)",
+        example="data/extracted/",
+    )
+    s3_credentials: S3Credentials = Field(
+        ..., description="S3 credentials for file operations"
+    )
+
+
 # Response Models
 class NetworkVolume(BaseModel):
     """Network volume information."""
@@ -255,6 +296,31 @@ class DeleteResponse(BaseModel):
     message: str = Field(
         ..., description="Status message", example="Successfully deleted"
     )
+
+
+class ExtractArchiveResponse(BaseModel):
+    """Response for archive extraction (zip or 7z)."""
+
+    success: bool = Field(..., description="Extraction success status")
+    extracted_files: List[str] = Field(
+        ..., description="List of extracted file paths", example=["data/file1.txt", "data/file2.txt"]
+    )
+    total_files: int = Field(..., description="Total number of files extracted", example=2)
+    target_path: str = Field(..., description="Target directory where files were extracted", example="data/")
+
+
+class ExtractZipResponse(BaseModel):
+    """Response for zip extraction.
+
+    Deprecated: Use ExtractArchiveResponse instead. Kept for backward compatibility.
+    """
+
+    success: bool = Field(..., description="Extraction success status")
+    extracted_files: List[str] = Field(
+        ..., description="List of extracted file paths", example=["data/file1.txt", "data/file2.txt"]
+    )
+    total_files: int = Field(..., description="Total number of files extracted", example=2)
+    target_path: str = Field(..., description="Target directory where files were extracted", example="data/")
 
 
 class ErrorResponse(BaseModel):

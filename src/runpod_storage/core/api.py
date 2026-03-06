@@ -231,6 +231,121 @@ class RunpodStorageAPI:
         s3_client = self._get_s3_client(datacenter_id)
         return s3_client.delete_file(volume_id, remote_path)
 
+    def extract_archive(
+        self,
+        volume_id: str,
+        archive_path: str,
+        target_path: Optional[str] = None,
+        progress_callback: Optional[callable] = None,
+    ) -> List[str]:
+        """Extract a zip or 7z archive file within a volume.
+
+        Downloads the archive file, extracts it locally, then uploads extracted files
+        back to the volume. Supports both .zip and .7z formats.
+
+        Args:
+            volume_id: Volume ID
+            archive_path: Path to the archive file in the volume (.zip or .7z)
+            target_path: Target directory for extracted files (default: same directory as archive)
+            progress_callback: Optional callback for progress updates.
+                Called with (current_file_num, total_files, current_filename)
+
+        Returns:
+            List of extracted file paths
+
+        Example:
+            >>> api = RunpodStorageAPI()
+            >>> # Extract archive.zip to the same directory
+            >>> files = api.extract_archive("vol_123", "data/archive.zip")
+            >>> print(f"Extracted {len(files)} files: {files}")
+            >>>
+            >>> # Extract 7z archive to a specific directory
+            >>> files = api.extract_archive("vol_123", "backup.7z", target_path="extracted/")
+        """
+        import zipfile
+        import tempfile
+        import shutil
+
+        # Determine archive format
+        archive_lower = archive_path.lower()
+        is_7z = archive_lower.endswith('.7z')
+        is_zip = archive_lower.endswith('.zip')
+
+        if not (is_7z or is_zip):
+            raise ValueError(f"Unsupported archive format. Only .zip and .7z files are supported.")
+
+        # Determine target directory
+        if target_path is None:
+            # Extract to same directory as the archive file
+            target_path = str(Path(archive_path).parent)
+            if target_path == ".":
+                target_path = ""
+
+        # Ensure target path ends with / if not empty
+        if target_path and not target_path.endswith("/"):
+            target_path += "/"
+
+        # Create temporary directory for extraction
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_archive = Path(temp_dir) / ("archive.7z" if is_7z else "archive.zip")
+            temp_extract = Path(temp_dir) / "extracted"
+            temp_extract.mkdir()
+
+            # Download the archive file
+            logger.info(f"Downloading archive file: {archive_path}")
+            self.download_file(volume_id, archive_path, str(temp_archive))
+
+            # Extract the archive file
+            logger.info(f"Extracting {'7z' if is_7z else 'zip'} file...")
+            try:
+                if is_7z:
+                    import py7zr
+                    with py7zr.SevenZipFile(temp_archive, 'r') as archive_ref:
+                        archive_ref.extractall(temp_extract)
+                else:
+                    with zipfile.ZipFile(temp_archive, 'r') as zip_ref:
+                        zip_ref.extractall(temp_extract)
+            except Exception as e:
+                raise ValueError(f"Invalid {'7z' if is_7z else 'zip'} file: {archive_path}") from e
+
+            # Get list of extracted files
+            extracted_files = []
+            all_files = list(temp_extract.rglob("*"))
+            file_count = len([f for f in all_files if f.is_file()])
+
+            # Upload each extracted file back to the volume
+            current_file = 0
+            for file_path in all_files:
+                if file_path.is_file():
+                    current_file += 1
+                    # Calculate relative path from extraction root
+                    relative_path = file_path.relative_to(temp_extract)
+                    remote_file_path = target_path + str(relative_path).replace("\\", "/")
+
+                    if progress_callback:
+                        progress_callback(current_file, file_count, str(relative_path))
+
+                    logger.info(f"Uploading: {remote_file_path}")
+                    self.upload_file(str(file_path), volume_id, remote_file_path)
+                    extracted_files.append(remote_file_path)
+
+        logger.info(f"Extracted {len(extracted_files)} files to {target_path}")
+        return extracted_files
+
+    def extract_zip(
+        self,
+        volume_id: str,
+        zip_path: str,
+        target_path: Optional[str] = None,
+        progress_callback: Optional[callable] = None,
+    ) -> List[str]:
+        """Extract a zip file within a volume.
+
+        Deprecated: Use extract_archive() instead, which supports both .zip and .7z formats.
+        This method is kept for backward compatibility.
+        """
+        return self.extract_archive(volume_id, zip_path, target_path, progress_callback)
+
     # Utility methods
     def get_available_datacenters(self) -> Dict[str, str]:
         """Get available datacenters."""

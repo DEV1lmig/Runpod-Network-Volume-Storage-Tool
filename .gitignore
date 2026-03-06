@@ -85,3 +85,9 @@ temp_*
 .env.production
 secrets/
 CLAUDE.md
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/*.local

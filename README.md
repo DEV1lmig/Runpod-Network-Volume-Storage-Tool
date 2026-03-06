@@ -1,24 +1,27 @@
 # Runpod Network Volume Storage Tool
 
-A command-line tool for managing Runpod network storage volumes and files. Built to work with Runpod's S3-compatible API for easy file transfers and volume management.
+A comprehensive tool for managing Runpod network storage volumes and files. Built to work with Runpod's S3-compatible API for easy file transfers and volume management.
 
 ## Table of Contents
 - [Getting Started](#getting-started)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Web Interface](#web-interface)
 - [Using the Interactive Mode](#using-the-interactive-mode)
 - [File Browser Guide](#file-browser-guide)
 - [Command Line Usage](#command-line-usage)
 - [Python SDK Usage](#python-sdk-usage)
+- [ZIP File Extraction](#zip-file-extraction)
 - [API Server](#api-server)
 - [Troubleshooting](#troubleshooting)
 
 ## Getting Started
 
-This tool provides three ways to interact with Runpod network storage:
-1. **Interactive CLI** - Menu-driven interface with file browser
-2. **Command Line** - Direct commands for automation
-3. **Python SDK** - Programmatic access for scripts
+This tool provides four ways to interact with Runpod network storage:
+1. **Web Interface** - Modern React-based UI for managing volumes and files
+2. **Interactive CLI** - Menu-driven interface with file browser
+3. **Command Line** - Direct commands for automation
+4. **Python SDK** - Programmatic access for scripts
 
 ### Prerequisites
 
@@ -54,6 +57,55 @@ export RUNPOD_S3_SECRET_KEY="your_s3_secret_key"
 ```
 
 The tool will prompt for credentials if not set.
+
+## Web Interface
+
+The project includes a modern React-based web interface for easy file and volume management.
+
+### Quick Start
+
+1. **Start the API server:**
+   ```bash
+   uv run runpod-storage-server
+   ```
+
+2. **For development** (with hot reload):
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Open http://localhost:3000
+
+3. **For production** (served by the API server):
+   ```bash
+   cd frontend
+   npm install
+   npm run build
+   cd ..
+   uv run runpod-storage-server
+   ```
+   Open http://localhost:8000
+
+### Features
+
+- **Intuitive UI**: Clean, modern interface with drag-and-drop file uploads
+- **Volume Management**: Create, view, and delete volumes
+- **File Operations**: Upload, download, browse, and delete files
+- **Folder Navigation**: Browse through folder structures in your volumes
+- **Real-time Progress**: Visual feedback for upload operations
+- **Responsive Design**: Works on desktop and mobile devices
+
+### Screenshots
+
+The web interface provides:
+- Credentials form to securely enter your API keys
+- Volume selector to switch between your storage volumes
+- File browser with folder navigation
+- Drag-and-drop file upload with progress tracking
+- Volume management dashboard
+
+For more details, see [frontend/README.md](frontend/README.md).
 
 ## Using the Interactive Mode
 
@@ -785,6 +837,62 @@ cleaned = api.cleanup_abandoned_uploads(volume_id, max_age_hours=1)
 - Compress files before uploading
 - Use wired connection instead of WiFi
 - Upload during off-peak hours for better bandwidth
+
+## ZIP File Extraction
+
+Extract zip files directly within your volumes without downloading them locally.
+
+### Quick Example
+
+```python
+from runpod_storage import RunpodStorageAPI
+
+api = RunpodStorageAPI()
+
+# Extract a zip file to the same directory
+files = api.extract_zip("volume-id", "data/archive.zip")
+print(f"Extracted {len(files)} files")
+
+# Extract to a specific directory
+files = api.extract_zip("volume-id", "backup.zip", target_path="restored/")
+```
+
+### Web Interface
+
+1. Navigate to the file browser
+2. Find a .zip file
+3. Click the **Extract** button (archive icon)
+4. Files will be extracted to the same directory
+
+### How It Works
+
+The tool:
+1. Downloads the zip file to a temporary location
+2. Extracts all files locally
+3. Uploads each extracted file back to the volume
+4. Automatically cleans up temporary files
+
+### Features
+
+- Preserves directory structure from the zip file
+- Progress tracking for large extractions
+- Automatic cleanup of temporary files
+- Works with nested folders in the zip
+
+### REST API Endpoint
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/volumes/{volume_id}/files/extract" \
+  -H "runpod-api-key: rpa_..." \
+  -H "s3-access-key: user_..." \
+  -H "s3-secret-key: rps_..." \
+  -d "zip_path=data/archive.zip" \
+  -d "target_path=extracted/"
+```
+
+For detailed documentation, see [ZIP Extraction Guide](docs/ZIP_EXTRACTION_GUIDE.md).
+
+For a complete example, see [examples/extract_zip_example.py](examples/extract_zip_example.py).
 
 ## API Server
 

@@ -5,9 +5,12 @@ Provides a complete REST API for Runpod storage operations with OpenAPI document
 """
 
 
+import os
+from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
 from ..core.models import HealthCheckResponse
@@ -73,16 +76,22 @@ def create_app() -> FastAPI:
         """Health check endpoint."""
         return HealthCheckResponse(status="healthy", version=__version__)
 
-    @app.get("/", tags=["Root"])
-    async def root():
-        """Root endpoint with API information."""
-        return {
-            "name": "Runpod Storage API",
-            "version": __version__,
-            "docs": "/docs",
-            "health": "/health",
-            "openapi": "/openapi.json",
-        }
+    # Serve static frontend files if they exist
+    frontend_dist = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
+    if frontend_dist.exists() and frontend_dist.is_dir():
+        app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+    else:
+        @app.get("/", tags=["Root"])
+        async def root():
+            """Root endpoint with API information."""
+            return {
+                "name": "Runpod Storage API",
+                "version": __version__,
+                "docs": "/docs",
+                "health": "/health",
+                "openapi": "/openapi.json",
+                "frontend": "Build the frontend with 'cd frontend && npm run build' to enable the web UI",
+            }
 
     return app
 
