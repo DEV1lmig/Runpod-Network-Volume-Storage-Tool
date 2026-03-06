@@ -1,11 +1,11 @@
-# ZIP File Extraction Guide
+# Archive File Extraction Guide
 
-Extract zip files directly within your Runpod network volumes.
+Extract zip and 7z archive files directly within your Runpod network volumes.
 
 ## Overview
 
-The zip extraction feature allows you to:
-- Upload a zip file to your volume
+The archive extraction feature allows you to:
+- Upload an archive file (.zip or .7z) to your volume
 - Extract it directly within the volume (no local download needed)
 - Choose the target directory for extracted files
 - Track extraction progress
@@ -18,8 +18,8 @@ This is useful for:
 
 ## How It Works
 
-1. **Download**: The zip file is downloaded from the volume to a temporary location
-2. **Extract**: Files are extracted locally
+1. **Download**: The archive file is downloaded from the volume to a temporary location
+2. **Extract**: Files are extracted locally using the appropriate decompressor (zip or 7z)
 3. **Upload**: Each extracted file is uploaded back to the volume
 4. **Cleanup**: Temporary files are automatically cleaned up
 
@@ -34,19 +34,30 @@ from runpod_storage import RunpodStorageAPI
 
 api = RunpodStorageAPI()
 
-# Extract to the same directory as the zip file
-files = api.extract_zip("volume-id", "data/archive.zip")
+# Extract zip file to the same directory
+files = api.extract_archive("volume-id", "data/archive.zip")
+print(f"Extracted {len(files)} files: {files}")
+
+# Extract 7z file to the same directory
+files = api.extract_archive("volume-id", "data/backup.7z")
 print(f"Extracted {len(files)} files: {files}")
 ```
 
 #### Custom Target Directory
 
 ```python
-# Extract to a specific directory
-files = api.extract_zip(
+# Extract zip to a specific directory
+files = api.extract_archive(
     "volume-id",
     "backups/backup.zip",
     target_path="restored/"
+)
+
+# Extract 7z to a specific directory
+files = api.extract_archive(
+    "volume-id",
+    "archives/data.7z",
+    target_path="extracted/"
 )
 ```
 
@@ -57,24 +68,41 @@ def progress_callback(current, total, filename):
     percent = (current / total) * 100
     print(f"[{percent:.1f}%] Uploading: {filename}")
 
-files = api.extract_zip(
+# Works with both zip and 7z files
+files = api.extract_archive(
     "volume-id",
-    "large-archive.zip",
+    "large-archive.7z",
     target_path="extracted/",
     progress_callback=progress_callback
 )
 ```
 
+#### Backward Compatibility
+
+```python
+# The old extract_zip() method still works for zip files
+files = api.extract_zip("volume-id", "data/archive.zip")
+# But extract_archive() is recommended as it supports both formats
+```
+
 ### REST API
 
-#### Extract ZIP File
+#### Extract Archive File (ZIP or 7Z)
 
 ```bash
+# Extract zip file
 curl -X POST "http://localhost:8000/api/v1/volumes/{volume_id}/files/extract" \
   -H "runpod-api-key: rpa_your_key" \
   -H "s3-access-key: user_your_key" \
   -H "s3-secret-key: rps_your_key" \
-  -d "zip_path=data/archive.zip"
+  -d "archive_path=data/archive.zip"
+
+# Extract 7z file
+curl -X POST "http://localhost:8000/api/v1/volumes/{volume_id}/files/extract" \
+  -H "runpod-api-key: rpa_your_key" \
+  -H "s3-access-key: user_your_key" \
+  -H "s3-secret-key: rps_your_key" \
+  -d "archive_path=data/backup.7z"
 ```
 
 #### With Target Directory
@@ -84,7 +112,7 @@ curl -X POST "http://localhost:8000/api/v1/volumes/{volume_id}/files/extract" \
   -H "runpod-api-key: rpa_your_key" \
   -H "s3-access-key: user_your_key" \
   -H "s3-secret-key: rps_your_key" \
-  -d "zip_path=data/archive.zip" \
+  -d "archive_path=data/archive.7z" \
   -d "target_path=extracted/"
 ```
 
@@ -107,20 +135,21 @@ curl -X POST "http://localhost:8000/api/v1/volumes/{volume_id}/files/extract" \
 
 1. Navigate to the **File Operations** tab
 2. Select your volume
-3. Find the zip file in the file list
+3. Find the archive file (.zip or .7z) in the file list
 4. Click the **Extract** button (archive icon)
 5. Confirm the extraction
-6. Files will be extracted to the same directory as the zip file
+6. Files will be extracted to the same directory as the archive file
 7. Refresh the file list to see extracted files
 
 ## CLI Command (Coming Soon)
 
 ```bash
-# Extract a zip file
+# Extract a zip or 7z file
 uv run runpod-storage extract volume-id data/archive.zip
+uv run runpod-storage extract volume-id data/backup.7z
 
 # Extract to specific directory
-uv run runpod-storage extract volume-id data/archive.zip --target extracted/
+uv run runpod-storage extract volume-id data/archive.7z --target extracted/
 ```
 
 ## Complete Example
@@ -128,49 +157,66 @@ uv run runpod-storage extract volume-id data/archive.zip --target extracted/
 ```python
 from runpod_storage import RunpodStorageAPI
 import zipfile
+import py7zr
 import os
 
 api = RunpodStorageAPI()
 volume_id = "your-volume-id"
 
-# 1. Create a sample zip file locally
+# Example 1: Create and extract a ZIP file
 with zipfile.ZipFile('demo.zip', 'w') as zipf:
     zipf.writestr('readme.txt', 'Hello World')
     zipf.writestr('data/file1.txt', 'File 1 content')
     zipf.writestr('data/file2.txt', 'File 2 content')
 
-# 2. Upload the zip file to the volume
 api.upload_file('demo.zip', volume_id, 'archives/demo.zip')
 print("✓ Uploaded demo.zip")
 
-# 3. Extract the zip file in the volume
-extracted = api.extract_zip(
+extracted = api.extract_archive(
     volume_id,
     'archives/demo.zip',
     target_path='extracted/'
 )
-print(f"✓ Extracted {len(extracted)} files")
+print(f"✓ Extracted {len(extracted)} files from ZIP")
 
-# 4. List extracted files
+# Example 2: Create and extract a 7Z file
+with py7zr.SevenZipFile('demo.7z', 'w') as archive:
+    archive.writestr('readme.txt', 'Hello from 7z')
+    archive.writestr('data/file1.txt', 'File 1 content')
+    archive.writestr('data/file2.txt', 'File 2 content')
+
+api.upload_file('demo.7z', volume_id, 'archives/demo.7z')
+print("✓ Uploaded demo.7z")
+
+extracted_7z = api.extract_archive(
+    volume_id,
+    'archives/demo.7z',
+    target_path='extracted_7z/'
+)
+print(f"✓ Extracted {len(extracted_7z)} files from 7Z")
+
+# List extracted files
 files = api.list_files(volume_id, prefix='extracted/')
 for file in files:
     print(f"  • {file['key']} ({file['size']} bytes)")
 
-# 5. Clean up
+# Clean up
 api.delete_file(volume_id, 'archives/demo.zip')
-for file_path in extracted:
+api.delete_file(volume_id, 'archives/demo.7z')
+for file_path in extracted + extracted_7z:
     api.delete_file(volume_id, file_path)
 os.remove('demo.zip')
+os.remove('demo.7z')
 print("✓ Cleanup complete")
 ```
 
 ## File Structure Preservation
 
-The extraction preserves the directory structure inside the zip file:
+The extraction preserves the directory structure inside the archive file:
 
-**Zip contents:**
+**Archive contents (zip or 7z):**
 ```
-archive.zip
+archive.zip (or archive.7z)
 ├── file1.txt
 ├── file2.txt
 └── subdir/
@@ -192,80 +238,83 @@ extracted/
 
 ```python
 # Good: Clear, organized structure
-api.extract_zip(vol_id, "backups/2024-01.zip", target_path="restored/2024-01/")
+api.extract_archive(vol_id, "backups/2024-01.zip", target_path="restored/2024-01/")
+api.extract_archive(vol_id, "backups/2024-01.7z", target_path="restored/2024-01/")
 
 # Avoid: Extracting to root can clutter the volume
-api.extract_zip(vol_id, "archive.zip")  # Extracts to same directory
+api.extract_archive(vol_id, "archive.zip")  # Extracts to same directory
 ```
 
-### 2. Check Zip File Size
+### 2. Check Archive File Size
 
-Large zip files take longer to extract:
+Large archive files take longer to extract:
 
 ```python
 files = api.list_files(volume_id)
-zip_file = next(f for f in files if f['key'] == 'large.zip')
-size_gb = zip_file['size'] / (1024**3)
+archive_file = next(f for f in files if f['key'] == 'large.7z')
+size_gb = archive_file['size'] / (1024**3)
 
 if size_gb > 10:
-    print(f"Warning: Large zip file ({size_gb:.1f} GB) may take several minutes")
+    print(f"Warning: Large archive file ({size_gb:.1f} GB) may take several minutes")
 
-api.extract_zip(volume_id, 'large.zip')
+api.extract_archive(volume_id, 'large.7z')
 ```
 
 ### 3. Clean Up After Extraction
 
 ```python
-# Keep the original zip and extracted files
-extracted = api.extract_zip(vol_id, "archive.zip", target_path="data/")
+# Keep the original archive and extracted files
+extracted = api.extract_archive(vol_id, "archive.7z", target_path="data/")
 
-# Or delete the zip after successful extraction
+# Or delete the archive after successful extraction
 if extracted:
-    api.delete_file(vol_id, "archive.zip")
-    print("✓ Zip file deleted after successful extraction")
+    api.delete_file(vol_id, "archive.7z")
+    print("✓ Archive file deleted after successful extraction")
 ```
 
 ### 4. Handle Errors Gracefully
 
 ```python
 try:
-    files = api.extract_zip(volume_id, "data/archive.zip")
+    files = api.extract_archive(volume_id, "data/archive.7z")
     print(f"Success! Extracted {len(files)} files")
 except ValueError as e:
-    print(f"Invalid zip file: {e}")
+    print(f"Invalid archive file: {e}")
 except Exception as e:
     print(f"Extraction failed: {e}")
 ```
 
 ## Limitations
 
-- **Zip files only**: Currently only supports `.zip` format (not `.tar`, `.tar.gz`, `.7z`, etc.)
-- **File size**: Very large zip files (>50GB) may take significant time to extract
+- **Archive formats**: Currently supports `.zip` and `.7z` formats only (not `.tar`, `.tar.gz`, `.rar`, etc.)
+- **File size**: Very large archive files (>50GB) may take significant time to extract
 - **Temp space**: Requires enough temporary disk space to hold the extracted files
-- **Nested zips**: Nested zip files are not automatically extracted
+- **Nested archives**: Nested archive files are not automatically extracted
 
 ## Error Messages
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| "Invalid zip file" | Corrupted or non-zip file | Verify the file is a valid zip |
+| "Unsupported archive format" | File is not .zip or .7z | Use supported formats only |
+| "Invalid zip/7z file" | Corrupted or invalid archive | Verify the file is a valid archive |
 | "Volume not found" | Invalid volume ID | Check volume ID is correct |
-| "File not found" | Zip file doesn't exist | Verify the zip path is correct |
+| "File not found" | Archive file doesn't exist | Verify the archive path is correct |
 | "Authentication failed" | Invalid credentials | Check API keys are valid |
 
 ## Performance
 
 Extraction time depends on:
-- **Zip file size**: Larger files take longer to download
+- **Archive file size**: Larger files take longer to download
 - **Number of files**: More files means more upload operations
 - **File sizes**: Many small files are slower than few large files
 - **Network speed**: Both download and upload speeds matter
+- **Compression ratio**: 7z files may take longer to decompress than zip
 
 **Approximate times** (may vary):
-- Small zip (1MB, 10 files): ~5-10 seconds
-- Medium zip (100MB, 100 files): ~1-2 minutes
-- Large zip (1GB, 1000 files): ~5-10 minutes
-- Very large zip (10GB, 10000 files): ~30-60 minutes
+- Small archive (1MB, 10 files): ~5-10 seconds
+- Medium archive (100MB, 100 files): ~1-2 minutes
+- Large archive (1GB, 1000 files): ~5-10 minutes
+- Very large archive (10GB, 10000 files): ~30-60 minutes
 
 ## Troubleshooting
 
@@ -274,12 +323,13 @@ Extraction time depends on:
 - Check your internet connection speed
 - Use progress callback to monitor progress
 - Consider extracting locally and uploading via `upload_directory()` instead
+- 7z files may decompress slower than zip due to higher compression
 
 ### Out of Disk Space
 
 The extraction uses temporary local storage. If you get disk space errors:
 - Free up space on your system
-- Extract smaller zip files
+- Extract smaller archive files
 - Use a machine with more disk space
 
 ### Files Not Appearing

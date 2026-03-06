@@ -254,11 +254,11 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
                 >
                   <Download size={20} />
                 </button>
-                {file.key.toLowerCase().endsWith('.zip') && (
+                {(file.key.toLowerCase().endsWith('.zip') || file.key.toLowerCase().endsWith('.7z')) && (
                   <button
                     onClick={() => handleExtract(file)}
                     className="icon-btn"
-                    title="Extract zip file"
+                    title={`Extract ${file.key.toLowerCase().endsWith('.7z') ? '7z' : 'zip'} file`}
                   >
                     <Archive size={20} />
                   </button>
