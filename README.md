@@ -1,11 +1,12 @@
 # Runpod Network Volume Storage Tool
 
-A command-line tool for managing Runpod network storage volumes and files. Built to work with Runpod's S3-compatible API for easy file transfers and volume management.
+A comprehensive tool for managing Runpod network storage volumes and files. Built to work with Runpod's S3-compatible API for easy file transfers and volume management.
 
 ## Table of Contents
 - [Getting Started](#getting-started)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Web Interface](#web-interface)
 - [Using the Interactive Mode](#using-the-interactive-mode)
 - [File Browser Guide](#file-browser-guide)
 - [Command Line Usage](#command-line-usage)
@@ -15,10 +16,11 @@ A command-line tool for managing Runpod network storage volumes and files. Built
 
 ## Getting Started
 
-This tool provides three ways to interact with Runpod network storage:
-1. **Interactive CLI** - Menu-driven interface with file browser
-2. **Command Line** - Direct commands for automation
-3. **Python SDK** - Programmatic access for scripts
+This tool provides four ways to interact with Runpod network storage:
+1. **Web Interface** - Modern React-based UI for managing volumes and files
+2. **Interactive CLI** - Menu-driven interface with file browser
+3. **Command Line** - Direct commands for automation
+4. **Python SDK** - Programmatic access for scripts
 
 ### Prerequisites
 
@@ -54,6 +56,55 @@ export RUNPOD_S3_SECRET_KEY="your_s3_secret_key"
 ```
 
 The tool will prompt for credentials if not set.
+
+## Web Interface
+
+The project includes a modern React-based web interface for easy file and volume management.
+
+### Quick Start
+
+1. **Start the API server:**
+   ```bash
+   uv run runpod-storage-server
+   ```
+
+2. **For development** (with hot reload):
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Open http://localhost:3000
+
+3. **For production** (served by the API server):
+   ```bash
+   cd frontend
+   npm install
+   npm run build
+   cd ..
+   uv run runpod-storage-server
+   ```
+   Open http://localhost:8000
+
+### Features
+
+- **Intuitive UI**: Clean, modern interface with drag-and-drop file uploads
+- **Volume Management**: Create, view, and delete volumes
+- **File Operations**: Upload, download, browse, and delete files
+- **Folder Navigation**: Browse through folder structures in your volumes
+- **Real-time Progress**: Visual feedback for upload operations
+- **Responsive Design**: Works on desktop and mobile devices
+
+### Screenshots
+
+The web interface provides:
+- Credentials form to securely enter your API keys
+- Volume selector to switch between your storage volumes
+- File browser with folder navigation
+- Drag-and-drop file upload with progress tracking
+- Volume management dashboard
+
+For more details, see [frontend/README.md](frontend/README.md).
 
 ## Using the Interactive Mode
 
