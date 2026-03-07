@@ -473,6 +473,59 @@ class RunpodS3Client:
             logger.error(f"Failed to delete file: {e}")
             raise
 
+    def create_folder(self, volume_id: str, folder_path: str) -> bool:
+        """Create a folder (empty object with trailing /) in a network volume.
+
+        Args:
+            volume_id: Network volume ID
+            folder_path: Folder path (trailing / added if missing)
+
+        Returns:
+            True if successful
+        """
+        if not folder_path.endswith("/"):
+            folder_path += "/"
+        try:
+            self.s3.put_object(Bucket=volume_id, Key=folder_path, Body=b"")
+            logger.info(f"Created folder {folder_path} in volume {volume_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create folder: {e}")
+            raise
+
+    def delete_folder(self, volume_id: str, folder_path: str) -> int:
+        """Delete all objects under a folder prefix in a network volume.
+
+        Args:
+            volume_id: Network volume ID
+            folder_path: Folder prefix (trailing / added if missing)
+
+        Returns:
+            Number of objects deleted
+        """
+        if not folder_path.endswith("/"):
+            folder_path += "/"
+        try:
+            deleted_count = 0
+            paginator = self.s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=volume_id, Prefix=folder_path):
+                objects = page.get("Contents", [])
+                if objects:
+                    delete_keys = [{"Key": obj["Key"]} for obj in objects]
+                    self.s3.delete_objects(
+                        Bucket=volume_id,
+                        Delete={"Objects": delete_keys},
+                    )
+                    deleted_count += len(delete_keys)
+            logger.info(
+                f"Deleted {deleted_count} objects from folder {folder_path} "
+                f"in volume {volume_id}"
+            )
+            return deleted_count
+        except Exception as e:
+            logger.error(f"Failed to delete folder: {e}")
+            raise
+
     def cleanup_abandoned_uploads(self, volume_id: str, max_age_hours: int = 24) -> int:
         """Clean up abandoned multipart uploads for a volume.
         

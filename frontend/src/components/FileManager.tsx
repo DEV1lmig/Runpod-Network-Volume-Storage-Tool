@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../services/api';
-import { FileInfo } from '../types';
+import { FileInfo, UploadTask } from '../types';
 import {
   File,
   Folder,
@@ -9,14 +9,21 @@ import {
   Upload,
   RefreshCw,
   FolderOpen,
+  FolderPlus,
   ArrowLeft,
-  Archive
+  Archive,
+  CheckCircle,
+  AlertCircle,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 import FileUpload from './FileUpload';
 
 interface Props {
   volumeId: string;
 }
+
+let uploadIdCounter = 0;
 
 const FileManager: React.FC<Props> = ({ volumeId }) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
@@ -25,6 +32,9 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
   const [success, setSuccess] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>('');
   const [showUpload, setShowUpload] = useState(false);
+  const [uploads, setUploads] = useState<UploadTask[]>([]);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
 
   useEffect(() => {
     loadFiles();
@@ -41,6 +51,54 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStartUpload = useCallback((file: File, remotePath: string) => {
+    const taskId = `upload-${++uploadIdCounter}`;
+    const task: UploadTask = {
+      id: taskId,
+      fileName: file.name,
+      remotePath,
+      progress: 0,
+      status: 'uploading',
+    };
+
+    setUploads((prev) => [...prev, task]);
+    setShowUpload(false);
+
+    apiClient
+      .uploadFile(volumeId, file, remotePath, (percent) => {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === taskId ? { ...u, progress: Math.round(percent) } : u
+          )
+        );
+      })
+      .then(() => {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === taskId ? { ...u, progress: 100, status: 'complete' } : u
+          )
+        );
+        loadFiles();
+      })
+      .catch((err: any) => {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === taskId
+              ? {
+                  ...u,
+                  status: 'error',
+                  error: err.response?.data?.detail || 'Upload failed',
+                }
+              : u
+          )
+        );
+      });
+  }, [volumeId]);
+
+  const dismissUpload = (taskId: string) => {
+    setUploads((prev) => prev.filter((u) => u.id !== taskId));
   };
 
   const handleDownload = async (file: FileInfo) => {
@@ -78,6 +136,44 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
     }
   };
 
+  const handleDeleteFolder = async (folderName: string) => {
+    const folderPath = currentPath + folderName + '/';
+    if (
+      !window.confirm(
+        `Are you sure you want to delete the folder "${folderName}" and ALL its contents?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setError('');
+      await apiClient.deleteFolder(volumeId, folderPath);
+      setSuccess(`Deleted folder: ${folderName}`);
+      setTimeout(() => setSuccess(''), 3000);
+      loadFiles();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to delete folder');
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+
+    const folderPath = currentPath + newFolderName.trim() + '/';
+    try {
+      setError('');
+      await apiClient.createFolder(volumeId, folderPath);
+      setSuccess(`Created folder: ${newFolderName}`);
+      setTimeout(() => setSuccess(''), 3000);
+      setNewFolderName('');
+      setShowCreateFolder(false);
+      loadFiles();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to create folder');
+    }
+  };
+
   const handleExtract = async (file: FileInfo) => {
     if (!window.confirm(`Extract ${file.key}? This will extract all files to the same directory.`)) {
       return;
@@ -93,11 +189,6 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to extract zip file');
     }
-  };
-
-  const handleUploadComplete = () => {
-    setShowUpload(false);
-    loadFiles();
   };
 
   const navigateToFolder = (folderPath: string) => {
@@ -144,6 +235,9 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
     return { folders, rootFiles };
   };
 
+  const pathSegments = currentPath.split('/').filter(Boolean);
+  const activeUploads = uploads.filter((u) => u.status === 'uploading');
+  const hasActiveUploads = activeUploads.length > 0;
   const { folders, rootFiles } = groupFilesByFolder();
 
   if (loading) {
@@ -166,6 +260,10 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
             <RefreshCw size={18} />
             Refresh
           </button>
+          <button onClick={() => setShowCreateFolder(true)} className="btn btn-secondary">
+            <FolderPlus size={18} />
+            New Folder
+          </button>
           <button onClick={() => setShowUpload(true)} className="btn btn-primary">
             <Upload size={18} />
             Upload File
@@ -173,19 +271,100 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
         </div>
       </div>
 
-      {currentPath && (
-        <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <button onClick={navigateUp} className="btn btn-secondary">
+      {/* Breadcrumb navigation */}
+      <div className="breadcrumb" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap' }}>
+        {currentPath && (
+          <button onClick={navigateUp} className="icon-btn" title="Go back" style={{ marginRight: '0.25rem' }}>
             <ArrowLeft size={18} />
-            Back
           </button>
-          <span style={{ color: '#6b7280' }}>Current path: /{currentPath}</span>
-        </div>
-      )}
+        )}
+        <button
+          onClick={() => setCurrentPath('')}
+          className="breadcrumb-segment"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontWeight: pathSegments.length === 0 ? 700 : 400,
+            color: pathSegments.length === 0 ? '#667eea' : '#6b7280',
+            padding: '0.25rem 0.5rem', borderRadius: '4px',
+          }}
+        >
+          Root
+        </button>
+        {pathSegments.map((seg, idx) => {
+          const segPath = pathSegments.slice(0, idx + 1).join('/') + '/';
+          const isLast = idx === pathSegments.length - 1;
+          return (
+            <React.Fragment key={segPath}>
+              <ChevronRight size={14} color="#9ca3af" />
+              <button
+                onClick={() => setCurrentPath(segPath)}
+                className="breadcrumb-segment"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontWeight: isLast ? 700 : 400,
+                  color: isLast ? '#667eea' : '#6b7280',
+                  padding: '0.25rem 0.5rem', borderRadius: '4px',
+                }}
+              >
+                {seg}
+              </button>
+            </React.Fragment>
+          );
+        })}
+      </div>
 
       {error && <div className="error">{error}</div>}
       {success && <div className="success">{success}</div>}
 
+      {/* Persistent upload tracker – always visible outside the modal */}
+      {uploads.length > 0 && (
+        <div className="upload-tracker" style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+              Uploads {hasActiveUploads && `(${activeUploads.length} active)`}
+            </span>
+          </div>
+          {uploads.map((task) => (
+            <div key={task.id} className="upload-tracker-item">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                {task.status === 'complete' && <CheckCircle size={16} color="#10b981" />}
+                {task.status === 'error' && <AlertCircle size={16} color="#ef4444" />}
+                {task.status === 'uploading' && (
+                  <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div>
+                )}
+                <span style={{ fontWeight: 500, fontSize: '0.875rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {task.fileName}
+                </span>
+                {task.status === 'uploading' && (
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#667eea' }}>
+                    {task.progress}%
+                  </span>
+                )}
+                {(task.status === 'complete' || task.status === 'error') && (
+                  <button
+                    onClick={() => dismissUpload(task.id)}
+                    className="icon-btn"
+                    style={{ padding: '0.125rem' }}
+                    title="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {task.status === 'uploading' && (
+                <div className="progress-bar" style={{ height: 4 }}>
+                  <div className="progress-fill" style={{ width: `${task.progress}%` }}></div>
+                </div>
+              )}
+              {task.status === 'error' && (
+                <span style={{ fontSize: '0.75rem', color: '#ef4444' }}>{task.error}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Upload modal */}
       {showUpload && (
         <div className="modal-overlay" onClick={() => setShowUpload(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -196,10 +375,53 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
               </button>
             </div>
             <FileUpload
-              volumeId={volumeId}
               currentPath={currentPath}
-              onComplete={handleUploadComplete}
+              onStartUpload={handleStartUpload}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Create folder modal */}
+      {showCreateFolder && (
+        <div className="modal-overlay" onClick={() => setShowCreateFolder(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Create Folder</h3>
+              <button onClick={() => setShowCreateFolder(false)} className="modal-close">
+                ✕
+              </button>
+            </div>
+            <div className="form-group">
+              <label className="label">Folder Name</label>
+              <input
+                type="text"
+                className="input"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="my-folder"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); }}
+                autoFocus
+              />
+              {currentPath && (
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                  Will be created at: /{currentPath}{newFolderName}/
+                </p>
+              )}
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => setShowCreateFolder(false)} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateFolder}
+                disabled={!newFolderName.trim()}
+                className="btn btn-primary"
+              >
+                <FolderPlus size={18} />
+                Create
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -210,13 +432,17 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
             <File size={48} />
           </div>
           <h3>No files found</h3>
-          <p>Upload files to get started</p>
+          <p>Upload files or create a folder to get started</p>
         </div>
       ) : (
         <ul className="file-list">
           {Array.from(folders.entries()).map(([folderName, folderFiles]) => (
             <li key={folderName} className="file-item">
-              <div className="file-info">
+              <div
+                className="file-info"
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigateToFolder(currentPath + folderName + '/')}
+              >
                 <div className="file-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Folder size={20} color="#667eea" />
                   {folderName}
@@ -230,6 +456,13 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
                   title="Open folder"
                 >
                   <FolderOpen size={20} />
+                </button>
+                <button
+                  onClick={() => handleDeleteFolder(folderName)}
+                  className="icon-btn danger"
+                  title="Delete folder"
+                >
+                  <Trash2 size={20} />
                 </button>
               </div>
             </li>

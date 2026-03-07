@@ -17,6 +17,15 @@ export interface UploadProgress {
   total: number;
 }
 
+export interface UploadTask {
+  id: string;
+  fileName: string;
+  remotePath: string;
+  progress: number;
+  status: 'pending' | 'uploading' | 'complete' | 'error';
+  error?: string;
+}
+
 export interface ApiCredentials {
   apiKey: string;
   s3AccessKey: string;

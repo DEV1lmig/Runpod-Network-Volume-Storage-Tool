@@ -298,6 +298,27 @@ class DeleteResponse(BaseModel):
     )
 
 
+class CreateFolderResponse(BaseModel):
+    """Response for folder creation."""
+
+    success: bool = Field(..., description="Folder creation success status")
+    folder_path: str = Field(
+        ..., description="Created folder path", example="data/subfolder/"
+    )
+
+
+class DeleteFolderResponse(BaseModel):
+    """Response for folder deletion."""
+
+    success: bool = Field(..., description="Folder deletion success status")
+    folder_path: str = Field(
+        ..., description="Deleted folder path", example="data/subfolder/"
+    )
+    deleted_count: int = Field(
+        ..., description="Number of objects deleted", example=5
+    )
+
+
 class ExtractArchiveResponse(BaseModel):
     """Response for archive extraction (zip or 7z)."""
 

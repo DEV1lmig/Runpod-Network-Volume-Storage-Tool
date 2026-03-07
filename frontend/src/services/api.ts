@@ -124,6 +124,28 @@ class ApiClient {
     );
   }
 
+  async createFolder(volumeId: string, folderPath: string): Promise<void> {
+    await this.client.post(
+      `/volumes/${volumeId}/folders/create`,
+      {},
+      {
+        headers: this.getHeaders(),
+        params: { folder_path: folderPath },
+      }
+    );
+  }
+
+  async deleteFolder(volumeId: string, folderPath: string): Promise<void> {
+    await this.client.post(
+      `/volumes/${volumeId}/folders/delete`,
+      {},
+      {
+        headers: this.getHeaders(),
+        params: { folder_path: folderPath },
+      }
+    );
+  }
+
   async extractZip(
     volumeId: string,
     zipPath: string,
