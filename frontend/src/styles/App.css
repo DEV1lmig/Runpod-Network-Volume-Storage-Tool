@@ -387,8 +387,14 @@ body {
   border-radius: 4px;
   transition: all .12s;
   font-size: .8rem;
+  color: var(--c-text-secondary);
+  font-weight: 400;
 }
-.breadcrumb-segment:hover { background: var(--c-accent-light); color: var(--c-accent) !important; }
+.breadcrumb-segment.active {
+  color: var(--c-accent);
+  font-weight: 600;
+}
+.breadcrumb-segment:hover { background: var(--c-accent-light); color: var(--c-accent); }
 
 /* === File table === */
 .file-table {

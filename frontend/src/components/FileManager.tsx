@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../services/api';
 import { FileInfo, UploadTask } from '../types';
 import {
@@ -169,7 +169,8 @@ const FileManager: React.FC<Props> = ({ volumeId, volumeName }) => {
     return (bytes / Math.pow(k, i)).toFixed(i > 0 ? 1 : 0) + ' ' + s[i];
   };
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateFormatOpts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+  const formatDate = (d: string) => new Date(d).toLocaleDateString(undefined, dateFormatOpts);
 
   const groupFilesByFolder = () => {
     const folders = new Map<string, FileInfo[]>();
@@ -223,8 +224,7 @@ const FileManager: React.FC<Props> = ({ volumeId, volumeName }) => {
           )}
           <button
             onClick={() => setCurrentPath('')}
-            className="breadcrumb-segment"
-            style={{ fontWeight: pathSegments.length === 0 ? 600 : 400, color: pathSegments.length === 0 ? 'var(--c-accent)' : 'var(--c-text-secondary)' }}
+            className={`breadcrumb-segment${pathSegments.length === 0 ? ' active' : ''}`}
           >
             /
           </button>
@@ -232,16 +232,15 @@ const FileManager: React.FC<Props> = ({ volumeId, volumeName }) => {
             const segPath = pathSegments.slice(0, idx + 1).join('/') + '/';
             const isLast = idx === pathSegments.length - 1;
             return (
-              <React.Fragment key={segPath}>
+              <Fragment key={segPath}>
                 <ChevronRight size={12} color="#9ca3af" />
                 <button
                   onClick={() => setCurrentPath(segPath)}
-                  className="breadcrumb-segment"
-                  style={{ fontWeight: isLast ? 600 : 400, color: isLast ? 'var(--c-accent)' : 'var(--c-text-secondary)' }}
+                  className={`breadcrumb-segment${isLast ? ' active' : ''}`}
                 >
                   {seg}
                 </button>
-              </React.Fragment>
+              </Fragment>
             );
           })}
         </div>
