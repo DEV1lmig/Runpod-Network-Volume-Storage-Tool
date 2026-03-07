@@ -243,11 +243,16 @@ async def upload_file(
     if not remote_path:
         remote_path = file.filename or "uploaded_file"
 
-    # Save uploaded file temporarily
+    # Stream uploaded file to disk in chunks to avoid loading it all into memory
+    file_size = 0
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-        content = await file.read()
-        tmp_file.write(content)
         tmp_file_path = tmp_file.name
+        while True:
+            chunk = await file.read(8 * 1024 * 1024)  # 8 MB chunks
+            if not chunk:
+                break
+            tmp_file.write(chunk)
+            file_size += len(chunk)
 
     try:
         import time
@@ -262,7 +267,6 @@ async def upload_file(
         success = api.upload_file(tmp_file_path, volume_id, remote_path, chunk_size)
 
         upload_time = time.time() - start_time
-        file_size = len(content)
         speed_mbps = (file_size / (1024 * 1024)) / upload_time if upload_time > 0 else 0
 
         return UploadResponse(

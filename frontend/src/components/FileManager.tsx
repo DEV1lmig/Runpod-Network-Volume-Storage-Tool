@@ -23,8 +23,6 @@ interface Props {
   volumeId: string;
 }
 
-let uploadIdCounter = 0;
-
 const FileManager: React.FC<Props> = ({ volumeId }) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,7 +52,7 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
   };
 
   const handleStartUpload = useCallback((file: File, remotePath: string) => {
-    const taskId = `upload-${++uploadIdCounter}`;
+    const taskId = crypto.randomUUID();
     const task: UploadTask = {
       id: taskId,
       fileName: file.name,
@@ -235,6 +233,10 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
     return { folders, rootFiles };
   };
 
+  const handleFolderKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleCreateFolder();
+  };
+
   const pathSegments = currentPath.split('/').filter(Boolean);
   const activeUploads = uploads.filter((u) => u.status === 'uploading');
   const hasActiveUploads = activeUploads.length > 0;
@@ -400,7 +402,7 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="my-folder"
-                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); }}
+                onKeyDown={handleFolderKeyDown}
                 autoFocus
               />
               {currentPath && (
