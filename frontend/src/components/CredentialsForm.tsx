@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ApiCredentials } from '../types';
 import { Key, Database, Lock } from 'lucide-react';
 
@@ -18,25 +18,18 @@ const CredentialsForm: React.FC<Props> = ({ onSubmit }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: 700 }}>
-        Enter Your Credentials
-      </h2>
-      <p style={{ marginBottom: '2rem', color: '#6b7280' }}>
-        Get your API keys from{' '}
-        <a
-          href="https://console.runpod.io/user/settings"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: '#667eea', fontWeight: 600 }}
-        >
-          Runpod Console
+      <h1>Runpod Storage</h1>
+      <p className="subtitle">
+        Enter your credentials to connect.{' '}
+        <a href="https://console.runpod.io/user/settings" target="_blank" rel="noopener noreferrer">
+          Get keys →
         </a>
       </p>
 
       <div className="form-group">
         <label className="label">
-          <Key size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
-          Runpod API Key
+          <Key size={13} style={{ display: 'inline', marginRight: '.3rem', verticalAlign: '-2px' }} />
+          API Key
         </label>
         <input
           type="password"
@@ -50,7 +43,7 @@ const CredentialsForm: React.FC<Props> = ({ onSubmit }) => {
 
       <div className="form-group">
         <label className="label">
-          <Database size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+          <Database size={13} style={{ display: 'inline', marginRight: '.3rem', verticalAlign: '-2px' }} />
           S3 Access Key
         </label>
         <input
@@ -65,7 +58,7 @@ const CredentialsForm: React.FC<Props> = ({ onSubmit }) => {
 
       <div className="form-group">
         <label className="label">
-          <Lock size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+          <Lock size={13} style={{ display: 'inline', marginRight: '.3rem', verticalAlign: '-2px' }} />
           S3 Secret Key
         </label>
         <input

@@ -8,7 +8,6 @@ import {
   Trash2,
   Upload,
   RefreshCw,
-  FolderOpen,
   FolderPlus,
   ArrowLeft,
   Archive,
@@ -21,9 +20,10 @@ import FileUpload from './FileUpload';
 
 interface Props {
   volumeId: string;
+  volumeName: string;
 }
 
-const FileManager: React.FC<Props> = ({ volumeId }) => {
+const FileManager: React.FC<Props> = ({ volumeId, volumeName }) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -53,51 +53,26 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
 
   const handleStartUpload = useCallback((file: File, remotePath: string) => {
     const taskId = crypto.randomUUID();
-    const task: UploadTask = {
-      id: taskId,
-      fileName: file.name,
-      remotePath,
-      progress: 0,
-      status: 'uploading',
-    };
-
+    const task: UploadTask = { id: taskId, fileName: file.name, remotePath, progress: 0, status: 'uploading' };
     setUploads((prev) => [...prev, task]);
     setShowUpload(false);
 
     apiClient
       .uploadFile(volumeId, file, remotePath, (percent) => {
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.id === taskId ? { ...u, progress: Math.round(percent) } : u
-          )
-        );
+        setUploads((prev) => prev.map((u) => (u.id === taskId ? { ...u, progress: Math.round(percent) } : u)));
       })
       .then(() => {
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.id === taskId ? { ...u, progress: 100, status: 'complete' } : u
-          )
-        );
+        setUploads((prev) => prev.map((u) => (u.id === taskId ? { ...u, progress: 100, status: 'complete' } : u)));
         loadFiles();
       })
       .catch((err: any) => {
         setUploads((prev) =>
-          prev.map((u) =>
-            u.id === taskId
-              ? {
-                  ...u,
-                  status: 'error',
-                  error: err.response?.data?.detail || 'Upload failed',
-                }
-              : u
-          )
+          prev.map((u) => (u.id === taskId ? { ...u, status: 'error', error: err.response?.data?.detail || 'Upload failed' } : u))
         );
       });
   }, [volumeId]);
 
-  const dismissUpload = (taskId: string) => {
-    setUploads((prev) => prev.filter((u) => u.id !== taskId));
-  };
+  const dismissUpload = (taskId: string) => setUploads((prev) => prev.filter((u) => u.id !== taskId));
 
   const handleDownload = async (file: FileInfo) => {
     try {
@@ -119,10 +94,7 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
   };
 
   const handleDelete = async (file: FileInfo) => {
-    if (!window.confirm(`Are you sure you want to delete ${file.key}?`)) {
-      return;
-    }
-
+    if (!window.confirm(`Delete ${file.key}?`)) return;
     try {
       setError('');
       await apiClient.deleteFile(volumeId, file.key);
@@ -136,14 +108,7 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
 
   const handleDeleteFolder = async (folderName: string) => {
     const folderPath = currentPath + folderName + '/';
-    if (
-      !window.confirm(
-        `Are you sure you want to delete the folder "${folderName}" and ALL its contents?`
-      )
-    ) {
-      return;
-    }
-
+    if (!window.confirm(`Delete folder "${folderName}" and ALL its contents?`)) return;
     try {
       setError('');
       await apiClient.deleteFolder(volumeId, folderPath);
@@ -157,7 +122,6 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-
     const folderPath = currentPath + newFolderName.trim() + '/';
     try {
       setError('');
@@ -173,198 +137,213 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
   };
 
   const handleExtract = async (file: FileInfo) => {
-    if (!window.confirm(`Extract ${file.key}? This will extract all files to the same directory.`)) {
-      return;
-    }
-
+    if (!window.confirm(`Extract ${file.key}?`)) return;
     try {
       setError('');
-      setSuccess('Extracting zip file... Please wait.');
-      const extractedFiles = await apiClient.extractZip(volumeId, file.key);
-      setSuccess(`Successfully extracted ${extractedFiles.length} files from ${file.key}`);
+      setSuccess('Extracting archive…');
+      const extracted = await apiClient.extractZip(volumeId, file.key);
+      setSuccess(`Extracted ${extracted.length} files from ${file.key}`);
       setTimeout(() => setSuccess(''), 5000);
       loadFiles();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to extract zip file');
+      setError(err.response?.data?.detail || 'Failed to extract file');
     }
   };
 
-  const navigateToFolder = (folderPath: string) => {
-    setCurrentPath(folderPath);
-  };
-
+  const navigateToFolder = (p: string) => setCurrentPath(p);
   const navigateUp = () => {
     const parts = currentPath.split('/').filter(Boolean);
     parts.pop();
     setCurrentPath(parts.join('/') + (parts.length > 0 ? '/' : ''));
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleString();
-  };
-
-  const groupFilesByFolder = () => {
-    const folders = new Map<string, FileInfo[]>();
-    const rootFiles: FileInfo[] = [];
-
-    files.forEach((file) => {
-      const relativePath = currentPath ? file.key.slice(currentPath.length) : file.key;
-      const parts = relativePath.split('/').filter(Boolean);
-
-      if (parts.length === 1) {
-        rootFiles.push(file);
-      } else if (parts.length > 1) {
-        const folderName = parts[0];
-        if (!folders.has(folderName)) {
-          folders.set(folderName, []);
-        }
-        folders.get(folderName)?.push(file);
-      }
-    });
-
-    return { folders, rootFiles };
-  };
-
   const handleFolderKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleCreateFolder();
   };
 
+  const formatSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const s = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return (bytes / Math.pow(k, i)).toFixed(i > 0 ? 1 : 0) + ' ' + s[i];
+  };
+
+  const formatDate = (d: string) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const groupFilesByFolder = () => {
+    const folders = new Map<string, FileInfo[]>();
+    const rootFiles: FileInfo[] = [];
+    files.forEach((file) => {
+      const rel = currentPath ? file.key.slice(currentPath.length) : file.key;
+      const parts = rel.split('/').filter(Boolean);
+      if (parts.length === 1) rootFiles.push(file);
+      else if (parts.length > 1) {
+        const name = parts[0];
+        if (!folders.has(name)) folders.set(name, []);
+        folders.get(name)?.push(file);
+      }
+    });
+    return { folders, rootFiles };
+  };
+
   const pathSegments = currentPath.split('/').filter(Boolean);
   const activeUploads = uploads.filter((u) => u.status === 'uploading');
-  const hasActiveUploads = activeUploads.length > 0;
   const { folders, rootFiles } = groupFilesByFolder();
 
-  if (loading) {
-    return (
-      <div className="loading">
-        <div className="spinner"></div>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <FolderOpen size={24} />
-          File Browser
-        </h2>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={loadFiles} className="btn btn-secondary">
-            <RefreshCw size={18} />
-            Refresh
+    <>
+      {/* Sticky header bar */}
+      <div className="content-header">
+        <div className="content-header-title">
+          <span>{volumeName}</span>
+        </div>
+        <div className="content-header-actions">
+          <button onClick={loadFiles} className="btn btn-ghost btn-sm" title="Refresh">
+            <RefreshCw size={14} />
           </button>
-          <button onClick={() => setShowCreateFolder(true)} className="btn btn-secondary">
-            <FolderPlus size={18} />
+          <button onClick={() => setShowCreateFolder(true)} className="btn btn-sm">
+            <FolderPlus size={14} />
             New Folder
           </button>
-          <button onClick={() => setShowUpload(true)} className="btn btn-primary">
-            <Upload size={18} />
-            Upload File
+          <button onClick={() => setShowUpload(true)} className="btn btn-primary btn-sm">
+            <Upload size={14} />
+            Upload
           </button>
         </div>
       </div>
 
-      {/* Breadcrumb navigation */}
-      <div className="breadcrumb" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap' }}>
-        {currentPath && (
-          <button onClick={navigateUp} className="icon-btn" title="Go back" style={{ marginRight: '0.25rem' }}>
-            <ArrowLeft size={18} />
+      <div className="content-body">
+        {/* Breadcrumb */}
+        <div className="breadcrumb">
+          {currentPath && (
+            <button onClick={navigateUp} className="icon-btn" title="Back" style={{ marginRight: '.15rem' }}>
+              <ArrowLeft size={15} />
+            </button>
+          )}
+          <button
+            onClick={() => setCurrentPath('')}
+            className="breadcrumb-segment"
+            style={{ fontWeight: pathSegments.length === 0 ? 600 : 400, color: pathSegments.length === 0 ? 'var(--c-accent)' : 'var(--c-text-secondary)' }}
+          >
+            /
           </button>
-        )}
-        <button
-          onClick={() => setCurrentPath('')}
-          className="breadcrumb-segment"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontWeight: pathSegments.length === 0 ? 700 : 400,
-            color: pathSegments.length === 0 ? '#667eea' : '#6b7280',
-            padding: '0.25rem 0.5rem', borderRadius: '4px',
-          }}
-        >
-          Root
-        </button>
-        {pathSegments.map((seg, idx) => {
-          const segPath = pathSegments.slice(0, idx + 1).join('/') + '/';
-          const isLast = idx === pathSegments.length - 1;
-          return (
-            <React.Fragment key={segPath}>
-              <ChevronRight size={14} color="#9ca3af" />
-              <button
-                onClick={() => setCurrentPath(segPath)}
-                className="breadcrumb-segment"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontWeight: isLast ? 700 : 400,
-                  color: isLast ? '#667eea' : '#6b7280',
-                  padding: '0.25rem 0.5rem', borderRadius: '4px',
-                }}
-              >
-                {seg}
-              </button>
-            </React.Fragment>
-          );
-        })}
-      </div>
+          {pathSegments.map((seg, idx) => {
+            const segPath = pathSegments.slice(0, idx + 1).join('/') + '/';
+            const isLast = idx === pathSegments.length - 1;
+            return (
+              <React.Fragment key={segPath}>
+                <ChevronRight size={12} color="#9ca3af" />
+                <button
+                  onClick={() => setCurrentPath(segPath)}
+                  className="breadcrumb-segment"
+                  style={{ fontWeight: isLast ? 600 : 400, color: isLast ? 'var(--c-accent)' : 'var(--c-text-secondary)' }}
+                >
+                  {seg}
+                </button>
+              </React.Fragment>
+            );
+          })}
+        </div>
 
-      {error && <div className="error">{error}</div>}
-      {success && <div className="success">{success}</div>}
+        {error && <div className="error">{error}</div>}
+        {success && <div className="success">{success}</div>}
 
-      {/* Persistent upload tracker – always visible outside the modal */}
-      {uploads.length > 0 && (
-        <div className="upload-tracker" style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-              Uploads {hasActiveUploads && `(${activeUploads.length} active)`}
-            </span>
-          </div>
-          {uploads.map((task) => (
-            <div key={task.id} className="upload-tracker-item">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                {task.status === 'complete' && <CheckCircle size={16} color="#10b981" />}
-                {task.status === 'error' && <AlertCircle size={16} color="#ef4444" />}
-                {task.status === 'uploading' && (
-                  <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div>
-                )}
-                <span style={{ fontWeight: 500, fontSize: '0.875rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {task.fileName}
-                </span>
-                {task.status === 'uploading' && (
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#667eea' }}>
-                    {task.progress}%
-                  </span>
-                )}
-                {(task.status === 'complete' || task.status === 'error') && (
-                  <button
-                    onClick={() => dismissUpload(task.id)}
-                    className="icon-btn"
-                    style={{ padding: '0.125rem' }}
-                    title="Dismiss"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-              {task.status === 'uploading' && (
-                <div className="progress-bar" style={{ height: 4 }}>
-                  <div className="progress-fill" style={{ width: `${task.progress}%` }}></div>
-                </div>
-              )}
-              {task.status === 'error' && (
-                <span style={{ fontSize: '0.75rem', color: '#ef4444' }}>{task.error}</span>
-              )}
+        {/* Upload tracker */}
+        {uploads.length > 0 && (
+          <div className="upload-tracker">
+            <div className="upload-tracker-title">
+              Uploads{activeUploads.length > 0 && ` — ${activeUploads.length} active`}
             </div>
-          ))}
-        </div>
-      )}
+            {uploads.map((task) => (
+              <div key={task.id} className="upload-tracker-item">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+                  {task.status === 'complete' && <CheckCircle size={14} color="var(--c-success)" />}
+                  {task.status === 'error' && <AlertCircle size={14} color="var(--c-danger)" />}
+                  {task.status === 'uploading' && <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
+                  <span style={{ fontSize: '.78rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {task.fileName}
+                  </span>
+                  {task.status === 'uploading' && (
+                    <span style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--c-accent)' }}>{task.progress}%</span>
+                  )}
+                  {(task.status === 'complete' || task.status === 'error') && (
+                    <button onClick={() => dismissUpload(task.id)} className="icon-btn" style={{ padding: '.1rem' }}><X size={12} /></button>
+                  )}
+                </div>
+                {task.status === 'uploading' && (
+                  <div className="progress-bar"><div className="progress-fill" style={{ width: `${task.progress}%` }} /></div>
+                )}
+                {task.status === 'error' && <span style={{ fontSize: '.7rem', color: 'var(--c-danger)' }}>{task.error}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading ? (
+          <div className="loading"><div className="spinner" /></div>
+        ) : folders.size === 0 && rootFiles.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon"><File size={36} /></div>
+            <h3>No files yet</h3>
+            <p>Upload a file or create a folder to get started.</p>
+          </div>
+        ) : (
+          /* File table */
+          <table className="file-table">
+            <thead>
+              <tr>
+                <th style={{ width: '50%' }}>Name</th>
+                <th>Size</th>
+                <th>Modified</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from(folders.entries()).map(([folderName, folderFiles]) => (
+                <tr key={folderName}>
+                  <td>
+                    <div className="file-name-cell clickable" onClick={() => navigateToFolder(currentPath + folderName + '/')}>
+                      <Folder size={16} color="var(--c-accent)" />
+                      {folderName}
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--c-text-secondary)', fontSize: '.78rem' }}>{folderFiles.length} items</td>
+                  <td style={{ color: 'var(--c-text-secondary)', fontSize: '.78rem' }}>—</td>
+                  <td>
+                    <div className="file-actions-cell">
+                      <button onClick={() => navigateToFolder(currentPath + folderName + '/')} className="icon-btn" title="Open"><FolderPlus size={15} /></button>
+                      <button onClick={() => handleDeleteFolder(folderName)} className="icon-btn danger" title="Delete"><Trash2 size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {rootFiles.map((file) => (
+                <tr key={file.key}>
+                  <td>
+                    <div className="file-name-cell">
+                      <File size={16} color="var(--c-text-secondary)" />
+                      {file.key.split('/').pop()}
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--c-text-secondary)', fontSize: '.78rem', whiteSpace: 'nowrap' }}>{formatSize(file.size)}</td>
+                  <td style={{ color: 'var(--c-text-secondary)', fontSize: '.78rem', whiteSpace: 'nowrap' }}>{formatDate(file.last_modified)}</td>
+                  <td>
+                    <div className="file-actions-cell">
+                      <button onClick={() => handleDownload(file)} className="icon-btn" title="Download"><Download size={15} /></button>
+                      {(file.key.toLowerCase().endsWith('.zip') || file.key.toLowerCase().endsWith('.7z')) && (
+                        <button onClick={() => handleExtract(file)} className="icon-btn" title="Extract"><Archive size={15} /></button>
+                      )}
+                      <button onClick={() => handleDelete(file)} className="icon-btn danger" title="Delete"><Trash2 size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {/* Upload modal */}
       {showUpload && (
@@ -372,14 +351,9 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">Upload File</h3>
-              <button onClick={() => setShowUpload(false)} className="modal-close">
-                ✕
-              </button>
+              <button onClick={() => setShowUpload(false)} className="modal-close">✕</button>
             </div>
-            <FileUpload
-              currentPath={currentPath}
-              onStartUpload={handleStartUpload}
-            />
+            <FileUpload currentPath={currentPath} onStartUpload={handleStartUpload} />
           </div>
         </div>
       )}
@@ -389,13 +363,11 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
         <div className="modal-overlay" onClick={() => setShowCreateFolder(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Create Folder</h3>
-              <button onClick={() => setShowCreateFolder(false)} className="modal-close">
-                ✕
-              </button>
+              <h3 className="modal-title">New Folder</h3>
+              <button onClick={() => setShowCreateFolder(false)} className="modal-close">✕</button>
             </div>
             <div className="form-group">
-              <label className="label">Folder Name</label>
+              <label className="label">Name</label>
               <input
                 type="text"
                 className="input"
@@ -406,111 +378,21 @@ const FileManager: React.FC<Props> = ({ volumeId }) => {
                 autoFocus
               />
               {currentPath && (
-                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.5rem' }}>
-                  Will be created at: /{currentPath}{newFolderName}/
+                <p style={{ fontSize: '.7rem', color: 'var(--c-text-secondary)', marginTop: '.35rem' }}>
+                  Path: /{currentPath}{newFolderName}/
                 </p>
               )}
             </div>
             <div className="modal-actions">
-              <button onClick={() => setShowCreateFolder(false)} className="btn btn-secondary">
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateFolder}
-                disabled={!newFolderName.trim()}
-                className="btn btn-primary"
-              >
-                <FolderPlus size={18} />
-                Create
+              <button onClick={() => setShowCreateFolder(false)} className="btn">Cancel</button>
+              <button onClick={handleCreateFolder} disabled={!newFolderName.trim()} className="btn btn-primary">
+                <FolderPlus size={14} /> Create
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {folders.size === 0 && rootFiles.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <File size={48} />
-          </div>
-          <h3>No files found</h3>
-          <p>Upload files or create a folder to get started</p>
-        </div>
-      ) : (
-        <ul className="file-list">
-          {Array.from(folders.entries()).map(([folderName, folderFiles]) => (
-            <li key={folderName} className="file-item">
-              <div
-                className="file-info"
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigateToFolder(currentPath + folderName + '/')}
-              >
-                <div className="file-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Folder size={20} color="#667eea" />
-                  {folderName}
-                </div>
-                <div className="file-meta">{folderFiles.length} items</div>
-              </div>
-              <div className="file-actions">
-                <button
-                  onClick={() => navigateToFolder(currentPath + folderName + '/')}
-                  className="icon-btn"
-                  title="Open folder"
-                >
-                  <FolderOpen size={20} />
-                </button>
-                <button
-                  onClick={() => handleDeleteFolder(folderName)}
-                  className="icon-btn danger"
-                  title="Delete folder"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </li>
-          ))}
-
-          {rootFiles.map((file) => (
-            <li key={file.key} className="file-item">
-              <div className="file-info">
-                <div className="file-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <File size={20} color="#6b7280" />
-                  {file.key.split('/').pop()}
-                </div>
-                <div className="file-meta">
-                  {formatFileSize(file.size)} • {formatDate(file.last_modified)}
-                </div>
-              </div>
-              <div className="file-actions">
-                <button
-                  onClick={() => handleDownload(file)}
-                  className="icon-btn"
-                  title="Download"
-                >
-                  <Download size={20} />
-                </button>
-                {(file.key.toLowerCase().endsWith('.zip') || file.key.toLowerCase().endsWith('.7z')) && (
-                  <button
-                    onClick={() => handleExtract(file)}
-                    className="icon-btn"
-                    title={`Extract ${file.key.toLowerCase().endsWith('.7z') ? '7z' : 'zip'} file`}
-                  >
-                    <Archive size={20} />
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(file)}
-                  className="icon-btn danger"
-                  title="Delete"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    </>
   );
 };
 
