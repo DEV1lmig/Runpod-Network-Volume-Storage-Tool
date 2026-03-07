@@ -231,6 +231,36 @@ class RunpodStorageAPI:
         s3_client = self._get_s3_client(datacenter_id)
         return s3_client.delete_file(volume_id, remote_path)
 
+    def create_folder(self, volume_id: str, folder_path: str) -> bool:
+        """Create a folder in a volume.
+
+        Args:
+            volume_id: Volume ID
+            folder_path: Folder path (trailing / added if missing)
+
+        Returns:
+            True if successful
+        """
+        volume = self.get_volume(volume_id)
+        datacenter_id = volume["dataCenterId"]
+        s3_client = self._get_s3_client(datacenter_id)
+        return s3_client.create_folder(volume_id, folder_path)
+
+    def delete_folder(self, volume_id: str, folder_path: str) -> int:
+        """Delete a folder and all its contents from a volume.
+
+        Args:
+            volume_id: Volume ID
+            folder_path: Folder prefix to delete
+
+        Returns:
+            Number of objects deleted
+        """
+        volume = self.get_volume(volume_id)
+        datacenter_id = volume["dataCenterId"]
+        s3_client = self._get_s3_client(datacenter_id)
+        return s3_client.delete_folder(volume_id, folder_path)
+
     def extract_archive(
         self,
         volume_id: str,

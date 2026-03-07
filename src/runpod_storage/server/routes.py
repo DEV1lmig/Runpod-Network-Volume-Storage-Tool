@@ -20,9 +20,11 @@ from ..core.exceptions import (
     VolumeNotFoundError,
 )
 from ..core.models import (
+    CreateFolderResponse,
     CreateVolumeRequest,
     DatacenterInfo,
     DeleteFileRequest,
+    DeleteFolderResponse,
     DeleteResponse,
     DownloadFileRequest,
     ExtractZipRequest,
@@ -241,11 +243,16 @@ async def upload_file(
     if not remote_path:
         remote_path = file.filename or "uploaded_file"
 
-    # Save uploaded file temporarily
+    # Stream uploaded file to disk in chunks to avoid loading it all into memory
+    file_size = 0
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-        content = await file.read()
-        tmp_file.write(content)
         tmp_file_path = tmp_file.name
+        while True:
+            chunk = await file.read(8 * 1024 * 1024)  # 8 MB chunks
+            if not chunk:
+                break
+            tmp_file.write(chunk)
+            file_size += len(chunk)
 
     try:
         import time
@@ -260,7 +267,6 @@ async def upload_file(
         success = api.upload_file(tmp_file_path, volume_id, remote_path, chunk_size)
 
         upload_time = time.time() - start_time
-        file_size = len(content)
         speed_mbps = (file_size / (1024 * 1024)) / upload_time if upload_time > 0 else 0
 
         return UploadResponse(
@@ -365,6 +371,72 @@ async def delete_file(
             raise HTTPException(
                 status_code=404, detail=f"File {remote_path} not found"
             )
+    except VolumeNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
+    except NetworkError as e:
+        raise HTTPException(status_code=e.status_code or 500, detail=str(e))
+    except RunpodStorageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/volumes/{volume_id}/folders/create",
+    response_model=CreateFolderResponse,
+    summary="Create folder",
+    description="Create a folder in a network volume.",
+)
+async def create_folder(
+    volume_id: str,
+    folder_path: str,
+    api_key: str = Depends(get_runpod_api_key),
+    s3_access_key: str = Header(..., description="S3 access key (e.g., user_XXX...)"),
+    s3_secret_key: str = Header(..., description="S3 secret key (e.g., rps_XXX...)"),
+) -> CreateFolderResponse:
+    """Create a folder in a volume."""
+    try:
+        api = RunpodStorageAPI(
+            api_key=api_key,
+            s3_access_key=s3_access_key,
+            s3_secret_key=s3_secret_key,
+        )
+
+        normalized = folder_path if folder_path.endswith("/") else folder_path + "/"
+        api.create_folder(volume_id, normalized)
+        return CreateFolderResponse(success=True, folder_path=normalized)
+    except VolumeNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
+    except NetworkError as e:
+        raise HTTPException(status_code=e.status_code or 500, detail=str(e))
+    except RunpodStorageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/volumes/{volume_id}/folders/delete",
+    response_model=DeleteFolderResponse,
+    summary="Delete folder",
+    description="Delete a folder and all its contents from a network volume.",
+)
+async def delete_folder(
+    volume_id: str,
+    folder_path: str,
+    api_key: str = Depends(get_runpod_api_key),
+    s3_access_key: str = Header(..., description="S3 access key (e.g., user_XXX...)"),
+    s3_secret_key: str = Header(..., description="S3 secret key (e.g., rps_XXX...)"),
+) -> DeleteFolderResponse:
+    """Delete a folder and all its contents from a volume."""
+    try:
+        api = RunpodStorageAPI(
+            api_key=api_key,
+            s3_access_key=s3_access_key,
+            s3_secret_key=s3_secret_key,
+        )
+
+        normalized = folder_path if folder_path.endswith("/") else folder_path + "/"
+        deleted_count = api.delete_folder(volume_id, normalized)
+        return DeleteFolderResponse(
+            success=True, folder_path=normalized, deleted_count=deleted_count
+        )
     except VolumeNotFoundError:
         raise HTTPException(status_code=404, detail=f"Volume {volume_id} not found")
     except NetworkError as e:
